@@ -55,7 +55,7 @@ _APPS_DIR = "{0}/.local/share/applications".format(_HOME)
 _PROFILES_DIR = "{0}/profiles".format(_ICE_DIR)
 _FF_PROFILES_DIR = "{0}/firefox".format(_ICE_DIR)
 _ICE_ICON = "/usr/share/pixmaps/ice.png"
-# Choice of browsers, multiple path options possible, we will just use the first one that is detected
+# Choice of browsers, multiple path options possible
 _BROWSERS=[
     {'name': 'Brave', 'bin':'/usr/bin/brave'},
     {'name': 'Chrome', 'bin': '/usr/bin/google-chrome'},
