@@ -22,7 +22,7 @@ Todo:
 - option to enter / overwrite browser path (e.g. custom vivaldi locations, tor browser)
 - confirm dialog for remove button
 [x] ok - option to Edit generated desktop files (in default editor via xdg-open)
-
+[x] ok - improved browser detection
 """
 
 import os
@@ -59,8 +59,10 @@ _ICE_ICON = "/usr/share/pixmaps/ice.png"
 # Choice of browsers
 _BROWSERS=[
     {'name': 'Brave', 'bin':'brave'},
+    {'name': 'Brave', 'bin':'brave-browser'},
     {'name': 'Chrome', 'bin': 'google-chrome'},
     {'name': 'Chromium', 'bin': 'chromium-browser'},
+    {'name': 'Chromium', 'bin': 'chromium'},
     {'name': 'Vivaldi', 'bin': 'vivaldi-stable'},
     {'name': 'Vivaldi', 'bin': 'vivaldi'},
     {'name': 'Firefox', 'bin': 'firefox'}
@@ -81,7 +83,7 @@ _HEADERS = {
 
 
 # Requisite dirs
-for directory in [ _ICE_DIR, _APPS_DIR, _PROFILES_DIR, _FF_PROFILES_DIR ]: 
+for directory in [ _ICE_DIR, _APPS_DIR, _PROFILES_DIR, _FF_PROFILES_DIR ]:
     if not os.path.exists(directory):
         os.system("mkdir -p {0}".format(directory))
 
@@ -281,7 +283,7 @@ def writefile(title, formatted, address, iconext, location):
     brow = browser.get_active_text()
     browser_selected = None
     for b in _BROWSERS:
-      if brow == b['name']:
+      if brow == b['name']+' ('+b['bin']+')':
         browser_selected = b 
 
     if browser_selected is None:
@@ -720,19 +722,21 @@ class Ice(Gtk.Window):
         global browser
         browser = Gtk.ComboBoxText()
         browser.set_entry_text_column(0)
-        browsers_available = 0
+        browsers_available = [] 
         for b in _BROWSERS:
             p = Popen(["which",b['bin']], stdout=PIPE,stderr=PIPE)
             (path,err) = p.communicate();
             if p.returncode == 0:
                 if os.path.exists(path.strip()):
-                    browser.append_text(b['name'])
-                    browsers_available+=1
+                    browsers_available.append(b['name']+' ('+b['bin']+')')
 
-        if browsers_available == 0:
+        if len(browsers_available) == 0:
           NoBrowserError()
         else:
-          browser.set_active(0)
+          browsers_available = list(set(browsers_available))
+          for b in browsers_available: 
+              browser.append_text(b)
+              browser.set_active(0)
 
         browser_box = Gtk.HBox()
         browser_void = Gtk.Label()
