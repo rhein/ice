@@ -42,6 +42,7 @@ from gi.repository.GdkPixbuf import Pixbuf
 from urllib.parse import urlparse, urlunparse
 from bs4 import BeautifulSoup
 import subprocess
+from subprocess import Popen, PIPE
 
 # load translations
 gettext.bindtextdomain('messages', os.path.dirname(__file__)+ '/../share/ice/locale/')
@@ -55,17 +56,14 @@ _APPS_DIR = "{0}/.local/share/applications".format(_HOME)
 _PROFILES_DIR = "{0}/profiles".format(_ICE_DIR)
 _FF_PROFILES_DIR = "{0}/firefox".format(_ICE_DIR)
 _ICE_ICON = "/usr/share/pixmaps/ice.png"
-# Choice of browsers, multiple path options possible
+# Choice of browsers
 _BROWSERS=[
-    {'name': 'Brave', 'bin':'/usr/bin/brave'},
-    {'name': 'Chrome', 'bin': '/usr/bin/google-chrome'},
-    {'name': 'Chrome', 'bin': '/snap/bin/google-chrome'},
-    {'name': 'Chromium', 'bin': '/usr/bin/chromium-browser'},
-    {'name': 'Chromium', 'bin': '/snap/bin/chromium-browser'},
-    {'name': 'Vivaldi', 'bin': '/usr/bin/vivaldi-stable'},
-    {'name': 'Vivaldi', 'bin': '/usr/bin/vivaldi'},
-    {'name': 'Firefox', 'bin': '/usr/bin/firefox'},
-    {'name': 'Firefox', 'bin': '/snap/bin/firefox'}
+    {'name': 'Brave', 'bin':'brave'},
+    {'name': 'Chrome', 'bin': 'google-chrome'},
+    {'name': 'Chromium', 'bin': 'chromium-browser'},
+    {'name': 'Vivaldi', 'bin': 'vivaldi-stable'},
+    {'name': 'Vivaldi', 'bin': 'vivaldi'},
+    {'name': 'Firefox', 'bin': 'firefox'}
 ]
 _LOCATIONS=[
     {'name': _("Accessories"), 'location': 'Utility;'},
@@ -283,7 +281,7 @@ def writefile(title, formatted, address, iconext, location):
     brow = browser.get_active_text()
     browser_selected = None
     for b in _BROWSERS:
-      if brow == b['name']+' ('+b['bin']+')':
+      if brow == b['name']:
         browser_selected = b 
 
     if browser_selected is None:
@@ -724,9 +722,12 @@ class Ice(Gtk.Window):
         browser.set_entry_text_column(0)
         browsers_available = 0
         for b in _BROWSERS:
-          if os.path.exists(b['bin']):
-            browser.append_text(b['name']+' ('+b['bin']+')')
-            browsers_available+=1
+            p = Popen(["which",b['bin']], stdout=PIPE,stderr=PIPE)
+            (path,err) = p.communicate();
+            if p.returncode == 0:
+                if os.path.exists(path.strip()):
+                    browser.append_text(b['name'])
+                    browsers_available+=1
 
         if browsers_available == 0:
           NoBrowserError()
