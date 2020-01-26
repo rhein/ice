@@ -14,6 +14,16 @@
 # excellent pyfav library that is integrated into this application.
 # ADDENDUM: Added support for Firefox (via "ice-firefox") and Vivaldi.
 
+"""
+Todo:
+- migrate all messages to dialogs
+- detect KDE and offer option to write kwin-Rules to fix icon issue for firefox (rule in ~/.config/kwinrulesrc)
+- complete gtk3 migration (get rid of deprecation warnings)
+- option to enter / overwrite browser path (e.g. custom vivaldi locations, tor browser)
+- option to Edit generated desktop files (in default editor via xdg-open)
+
+"""
+
 import os
 import sys
 import requests
@@ -22,32 +32,47 @@ import urllib.parse
 import urllib.error
 import os.path
 import string
-import gi  ## added by MG ##
-gi.require_version('Gtk','3.0') ## added by MG ##
+import gettext
+import locale
+import gi
+gi.require_version('Gtk','3.0')
 from gi.repository import Gtk
 from gi.repository.GdkPixbuf import Pixbuf
 from urllib.parse import urlparse, urlunparse
 from bs4 import BeautifulSoup
 
-import gettext
-import locale
+# load translations
+gettext.bindtextdomain('messages', os.path.dirname(__file__)+ '/../share/ice/locale/')
+gettext.textdomain('messages')
+_ = gettext.gettext
 
+# configs
 _HOME = os.getenv("HOME")
 _ICE_DIR = "{0}/.local/share/ice".format(_HOME)
 _APPS_DIR = "{0}/.local/share/applications".format(_HOME)
 _PROFILES_DIR = "{0}/profiles".format(_ICE_DIR)
 _FF_PROFILES_DIR = "{0}/firefox".format(_ICE_DIR)
 _ICE_ICON = "/usr/share/pixmaps/ice.png"
-_BRAVE_BIN = "/usr/bin/brave"
-_CHROME_BIN = "/usr/bin/google-chrome"
-_CHROMIUM_BIN = "/usr/bin/chromium-browser"
-_VIVALDI_BIN = "/usr/bin/vivaldi-stable"
-_FIREFOX_BIN = "/usr/bin/firefox"
-
-gettext.bindtextdomain('messages', os.path.dirname(__file__)+ '/../share/ice/locale/')
-gettext.textdomain('messages')
-_ = gettext.gettext
-
+_BROWSERS=[
+    {'name': 'Brave', 'bin':'/usr/bin/brave'},
+    {'name': 'Chrome', 'bin': '/usr/bin/google-chrome'},
+    {'name': 'Chromium', 'bin': '/usr/bin/chromium-browser'},
+    {'name': 'Vivaldi', 'bin': '/usr/bin/vivaldi-stable'},
+    {'name': 'Firefox', 'bin': '/usr/bin/firefox'}
+]
+_LOCATIONS=[
+    {'name': _("Accessories"), 'location': 'Utility;'},
+    {'name': _("Games"), 'location': 'Game;'},
+    {'name': _("Graphics"), 'location': 'Graphics;'},
+    {'name': _("Internet"), 'location': 'Network;'},
+    {'name': _("Office"), 'location': 'Office;'},
+    {'name': _("Programming"), 'location': 'Development;'},
+    {'name': _("Multimedia"), 'location': 'AudioVideo;'},
+    {'name': _("System"), 'location': 'System;'}
+]
+_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:64.0) Gecko/20100101 Firefox/64.0',
+}
 
 
 # Requisite dirs
@@ -55,11 +80,11 @@ for directory in [ _ICE_DIR, _APPS_DIR, _PROFILES_DIR, _FF_PROFILES_DIR ]:
     if not os.path.exists(directory):
         os.system("mkdir -p {0}".format(directory))
 
-headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:64.0) Gecko/20100101 Firefox/64.0',
-    #'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.152 Safari/537.36'
-}
-
+######
+#
+# helper functions
+#
+######
 
 def get_details(app):
     a = open(app, 'r', errors='ignore')
@@ -140,7 +165,7 @@ def download_favicon(url, file_prefix='', target_dir='/tmp'):
 
     if not favicon_url:
         raise Exception(_("Unable to find favicon for, {0}").format(url))
-    response = requests.get(favicon_url, headers=headers)
+    response = requests.get(favicon_url, headers=_HEADERS)
     if response.status_code == requests.codes.ok:
         parsed_uri = urlparse(favicon_url)
         favicon_filepath = parsed_uri.path
@@ -192,7 +217,7 @@ def get_favicon_url(url):
     parsed_site_uri = urlparse(url)
 
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=_HEADERS)
     except:
         raise Exception(_("Unable to find URL. Is it valid? {0}").format(url))
 
@@ -204,7 +229,7 @@ def get_favicon_url(url):
 
     favicon_url = '{uri.scheme}://{uri.netloc}/favicon.ico'.format(uri=parsed_site_uri)
 
-    response = requests.get(favicon_url, headers=headers)
+    response = requests.get(favicon_url, headers=_HEADERS)
     if response.status_code == requests.codes.ok:
         return favicon_url
 
@@ -222,22 +247,14 @@ def applicate():
     formatted = semiformatted.lower()
 
     loc = where.get_active_text()
-    if loc == _("Accessories"):
-        location = "Utility;"
-    elif loc == _("Games"):
-        location = "Game;"
-    elif loc == _("Graphics"):
-        location = "Graphics;"
-    elif loc == _("Internet"):
-        location = "Network;"
-    elif loc == _("Office"):
-        location = "Office;"
-    elif loc == _("Programming"):
-        location = "Development;"
-    elif loc == _("Multimedia"):
-        location = "AudioVideo;"
-    elif loc == _("System"):
-        location = "System;"
+    location = None
+    for l in _LOCATIONS:
+      if loc == l['name']:
+        location = l['location'] 
+
+    if location is None:
+        print(_("ERROR: An unknown location selection error has occurred."))
+        sys.exit(1)
 
     global iconpath
     iconname = iconpath.replace("/", " ").split()[-1]
@@ -256,17 +273,13 @@ def writefile(title, formatted, address, iconext, location):
     os.system("cp --force {0} {1}/{2}.{3}".format(iconpath, _ICE_DIR, formatted, iconext))
     appfile = os.path.expanduser("{0}/{1}.desktop".format(_APPS_DIR, formatted))
     os.system("touch {0}".format(appfile))
-    if chrome.get_active() == True:
-        browser = "google-chrome"
-    elif chromium.get_active() == True:
-        browser = "chromium-browser"
-    elif brave.get_active() == True:
-        browser = "brave"
-    elif vivaldi.get_active() == True:
-        browser = "vivaldi"
-    elif firefox.get_active() == True:
-        browser = "firefox"
-    else:
+    brow = browser.get_active_text()
+    browser_selected = None
+    for b in _BROWSERS:
+      if brow == b['name']:
+        browser_selected = b 
+
+    if browser_selected is None:
         print(_("ERROR: An unknown browser selection error has occurred."))
         sys.exit(1)
 
@@ -279,18 +292,18 @@ def writefile(title, formatted, address, iconext, location):
         appfile1.write("Name={0}\n".format(title))
         appfile1.write("Comment={0} (Ice SSB)\n".format(title))
 
-        if (browser == "firefox"):
+        if (browser_selected['name'] == "Firefox"):
             firefox_profile_path  = "{0}/{1}".format(_FF_PROFILES_DIR, formatted)
-            appfile1.write("Exec={0} --class ICE-SSB-{2} --profile {3} --no-remote {1}\n".format(browser, address, formatted, firefox_profile_path))
+            appfile1.write("Exec={0} --class ICE-SSB-{2} --profile {3} --no-remote {1}\n".format(browser_selected['bin'], address, formatted, firefox_profile_path))
             appfile1.write("IceFirefox={0}\n".format(formatted))
             init_firefox_profile(firefox_profile_path)
         else:
             if isolate_profile == True:
                 profile_path = "{0}/{1}".format(_PROFILES_DIR, formatted)
-                appfile1.write("Exec={0} --app={1} --class=ICE-SSB-{2} --user-data-dir={3}\n".format(browser, address, formatted, profile_path))
+                appfile1.write("Exec={0} --app={1} --class=ICE-SSB-{2} --user-data-dir={3}\n".format(browser_selected['bin'], address, formatted, profile_path))
                 appfile1.write("X-ICE-SSB-Profile={0}\n".format(formatted))
             else:
-              appfile1.write("Exec={0} --app={1} --class=ICE-SSB-{2}\n".format(browser, address, formatted))
+              appfile1.write("Exec={0} --app={1} --class=ICE-SSB-{2}\n".format(browser_selected['bin'], address, formatted))
 
         appfile1.write("Terminal=false\n")
         appfile1.write("X-MultipleArgs=false\n")
@@ -334,9 +347,6 @@ def init_firefox_profile(path):
         sfile.write('user_pref("browser.tabs.warnOnClose", false);')
         sfile.write('user_pref("plugin.state.flash", 2);')
         sfile.write('user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);')
-
-    # rhein: do we really need this? 
-    #os.system('rm -rf ' + chromepath + '/cache2')
 
 
 def delete(button):
@@ -387,6 +397,12 @@ def clean_orphaned_profiles(known_apps):
                 os.system("rm -rf {0}".format(a))
 
 
+######
+#
+# dialog / message helper classes
+#
+######
+
 class IconSel(Gtk.FileChooserDialog):
 
     def __init__(self):
@@ -403,11 +419,11 @@ class IconSel(Gtk.FileChooserDialog):
 
             dialog.set_preview_widget_active(valid_preview)
 
-        filew = Gtk.FileChooserDialog(
-            _("Please choose an icon."),
-            None,
-            Gtk.FileChooserAction.OPEN,
-            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
+        filew = Gtk.FileChooserDialog()
+        filew.title=_("Please choose an icon.")
+        filew.parent=None
+        filew.action=Gtk.FileChooserAction.OPEN
+        filew.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK)
         filew.set_filename(_ICE_ICON)
 
         filter1 = Gtk.FileFilter()
@@ -436,41 +452,16 @@ class IconSel(Gtk.FileChooserDialog):
         elif response == Gtk.ResponseType.CANCEL:
             filew.destroy()
 
-
-class NoBrowserError(Gtk.Window):
-
-    def destroy(self, button):
-        self.close()
+class NoBrowserError(Gtk.MessageDialog):
 
     def __init__(self):
-        Gtk.Window.__init__(self, title=_("Browser Error"))
-        self.set_size_request(250, 130)
-        self.set_icon_from_file(_ICE_ICON)
-
-        print(_("test"))
-
-        main_lab = Gtk.Label()
-        main_lab.set_markup(_("<b>Warning: No Suitable Browser Detected</b>"))
-        text_lab = Gtk.Label(_("The name of the SSB will cause an existing SSB to\nbe overwritten. To prevent this, change a letter in\nthe name. Continue anyway?"))
-        text_lab = Gtk.Label(_("Ice requires a system installation of either Google\nChrome or Chromium in order to function. Please\ninstall at least one in order to create SSBs."))
-
-        close = Gtk.Button(label=_("Close"))
-        close.connect("clicked", self.destroy)
-        void = Gtk.Label()
-        box = Gtk.HBox()
-        box.pack_start(void, True, True, 0)
-        box.pack_start(close, False, False, 0)
-
-        main_vbox = Gtk.VBox()
-        main_vbox.pack_start(main_lab, False, False, 10)
-        main_vbox.pack_start(text_lab, False, False, 0)
-        main_vbox.pack_start(box, False, False, 10)
-
-        main_hbox = Gtk.HBox()
-        main_hbox.pack_start(main_vbox, True, True, 10)
-        self.add(main_hbox)
-        self.show_all()
-
+        dialog = Gtk.MessageDialog(flags=0, message_type=Gtk.MessageType.INFO, title=_("WARNING"))
+        dialog.set_markup(_("<b>Warning: No Suitable Browser Detected</b>"))
+        dialog.format_secondary_text(
+          _("Ice requires a system installation of either Brave, Chromium, Google Chrome, Firefox or Vivaldi in order to function.\n\nPlease install at least one in order to create SSBs.")
+        )
+        dialog.add_buttons(Gtk.STOCK_CLOSE, Gtk.ResponseType.CLOSE)
+        dialog.run() 
 
 class DuplicateError(Gtk.Window):
 
@@ -598,6 +589,11 @@ class EmptyNameError(Gtk.Window):
         self.add(main_hbox)
         self.show_all()
 
+######
+#
+# the main Ice app class
+#
+######
 
 class Ice(Gtk.Window):
 
@@ -662,7 +658,7 @@ class Ice(Gtk.Window):
 
         where_store = [_("Accessories"), _("Games"), _("Graphics"), _("Internet"),
                        _("Office"), _("Programming"), _("Multimedia"), _("System")]
-        where_lab = Gtk.Label(label=_("Where in the menu?"))
+        where_lab = Gtk.Label.new(_("Where in the menu?"))
         global where
         where = Gtk.ComboBoxText()
         where.set_entry_text_column(0)
@@ -693,86 +689,39 @@ class Ice(Gtk.Window):
         download_icon = Gtk.Button(label=_("Use site favicon"))
         download_icon.connect("clicked", self.icon_download)
 
-        icon_vbox = Gtk.VBox()
-        icon_vbox.pack_start(choose_icon, True, True, 5)
-        icon_vbox.pack_start(download_icon, True, True, 5)
+        icon_vbox = Gtk.HBox()
+        icon_vbox.pack_start(choose_icon, True, True, 10)
+        icon_vbox.pack_start(download_icon, True, True, 0)
         icon_hbox = Gtk.HBox()
         icon_hbox.pack_start(icon_box, False, False, 10)
         icon_hbox.pack_start(icon_vbox, True, True, 0)
+        
+        # offer choice of browsers
+        browser_lab = Gtk.Label.new(_("Choose Browser to use"))
+        global browser
+        browser = Gtk.ComboBoxText()
+        browser.set_entry_text_column(0)
+        browsers_available = 0
+        for b in _BROWSERS:
+          if os.path.exists(b['bin']):
+            browser.append_text(b['name'])
+            browsers_available+=1
 
-        global firefox
-        firefox = Gtk.RadioButton.new_with_label_from_widget(None, " Firefox")
+        if browsers_available == 0:
+          NoBrowserError()
+        else:
+          browser.set_active(0)
 
-        if not os.path.exists(_FIREFOX_BIN):
-            firefox.set_sensitive(False)
-
-        if not os.path.exists(_CHROMIUM_BIN) and not \
-                os.path.exists(_CHROME_BIN) and not \
-                os.path.exists(_BRAVE_BIN) and not \
-                os.path.exists(_VIVALDI_BIN) and \
-                os.path.exists(_FIREFOX_BIN):
-            firefox.set_active(True)
-
-        global brave 
-        brave = Gtk.RadioButton.new_from_widget(firefox)
-        brave.set_label(" Brave")
-
-        if not os.path.exists(_BRAVE_BIN):
-            brave.set_sensitive(False)
-
-        if not os.path.exists(_CHROMIUM_BIN) and not \
-                os.path.exists(_FIREFOX_BIN) and not \
-                os.path.exists(_CHROME_BIN) and not \
-                os.path.exists(_VIVALDI_BIN) and \
-                os.path.exists(_BRAVE_BIN):
-            brave.set_active(True)
-
-        global chrome
-        chrome = Gtk.RadioButton.new_from_widget(brave)
-        chrome.set_label(" Chrome")
-
-        if not os.path.exists(_CHROME_BIN):
-            chrome.set_sensitive(False)
-
-        if not os.path.exists(_CHROMIUM_BIN) and not \
-                os.path.exists(_FIREFOX_BIN) and not \
-                os.path.exists(_BRAVE_BIN) and not \
-                os.path.exists(_VIVALDI_BIN) and \
-                os.path.exists(_CHROME_BIN):
-            chrome.set_active(True)
-
-        global vivaldi
-        vivaldi = Gtk.RadioButton.new_from_widget(chrome)
-        vivaldi.set_label(" Vivaldi")
-
-        if not os.path.exists(_VIVALDI_BIN):
-            vivaldi.set_sensitive(False)
-
-        if not os.path.exists(_CHROMIUM_BIN) and not \
-                os.path.exists(_FIREFOX_BIN) and not \
-                os.path.exists(_BRAVE_BIN) and not \
-                os.path.exists(_CHROME_BIN) and \
-                os.path.exists(_VIVALDI_BIN):
-            vivaldi.set_active(True)
-
-        global chromium
-        chromium = Gtk.RadioButton.new_from_widget(vivaldi)
-        chromium.set_label(" Chromium")
-
-        if not os.path.exists(_CHROMIUM_BIN):
-            chromium.set_sensitive(False)
-
-        if not os.path.exists(_CHROME_BIN) and not \
-                os.path.exists(_FIREFOX_BIN) and not \
-                os.path.exists(_BRAVE_BIN) and not \
-                os.path.exists(_VIVALDI_BIN) and \
-                os.path.exists(_CHROMIUM_BIN):
-            chromium.set_active(True)
+        browser_box = Gtk.HBox()
+        browser_void = Gtk.Label()
+        browser_box.pack_start(browser_lab, False, False, 0)
+        browser_box.pack_start(browser_void, False, False, 10)
+        browser_box.pack_start(browser, True, True, 0)
 
         global isolate_profile
         isolate_profile=False
         isolate_box = Gtk.VBox()
-        isolate_button = Gtk.CheckButton(label=_(" Create the SSB with an isolated browser profile (Note: Firefox SSB's are always isolated)"))
+        isolate_button = Gtk.CheckButton(label=_(" Create the SSB with an isolated browser profile (Note: Firefox SSB are always isolated)"))
         isolate_button.connect("toggled", self.isolate_clicked)
         isolate_box.add(isolate_button)
 
@@ -780,16 +729,11 @@ class Ice(Gtk.Window):
         apply_button.connect("clicked", self.apply_clicked)
         close_button = Gtk.Button(label=_("Close"))
         close_button.connect("clicked", self.destroy)
+
         button_void = Gtk.Label()
         button_box = Gtk.HBox()
-        button_box.pack_start(brave, False, False, 10)
-        button_box.pack_start(chrome, False, False, 10)
-        button_box.pack_start(chromium, False, False, 0)
-        button_box.pack_start(vivaldi, False, False, 10)
-        button_box.pack_start(firefox, False, False, 0)
-        button_box.pack_start(button_void, True, True, 0)
-        button_box.pack_start(close_button, False, False, 20)
-        button_box.pack_start(apply_button, False, False, 0)
+        button_box.pack_end(apply_button, False, False, 0)
+        button_box.pack_end(close_button, False, False, 10)
 
         create_vbox = Gtk.VBox()
         create_vbox.pack_start(welcome, False, False, 15)
@@ -797,8 +741,9 @@ class Ice(Gtk.Window):
         create_vbox.pack_start(url, False, False, 10)
         create_vbox.pack_start(where_box, False, False, 10)
         create_vbox.pack_start(icon_hbox, False, False, 10)
+        create_vbox.pack_start(browser_box, False, False, 10)
         create_vbox.pack_start(isolate_box, False, False, 10)
-        create_vbox.pack_start(button_box, False, False, 0)
+        create_vbox.pack_start(button_box, False, False, 10)
 
         create_hbox = Gtk.HBox()
         create_hbox.pack_start(create_vbox, True, True, 20)
@@ -864,14 +809,6 @@ class Ice(Gtk.Window):
         main_hbox.pack_start(main_vbox, True, True, 10)
         self.add(main_hbox)
         self.show_all()
-
-        if not os.path.exists(_CHROME_BIN) and not \
-                os.path.exists(_CHROMIUM_BIN) and not \
-                os.path.exists(_VIVALDI_BIN) and not \
-                os.path.exists(_BRAVE_BIN) and not \
-                os.path.exists(_FIREFOX_BIN):
-            apply_button.set_sensitive(False)
-            NoBrowserError()
 
 
 if __name__ == '__main__':
