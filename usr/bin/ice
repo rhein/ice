@@ -65,6 +65,7 @@ _BROWSERS=[
     {'name': 'Chromium', 'bin': 'chromium'},
     {'name': 'Vivaldi', 'bin': 'vivaldi-stable'},
     {'name': 'Vivaldi', 'bin': 'vivaldi'},
+    {'name': 'Firefox', 'bin': 'firefox-developer-edition'},
     {'name': 'Firefox', 'bin': 'firefox'}
 ]
 _LOCATIONS=[
