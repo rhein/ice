@@ -734,11 +734,12 @@ class Ice(Gtk.Window):
         if len(browsers_available) == 0:
           NoBrowserError()
         else:
-          browsers_available = list(set(browsers_available))
+          browsers_available = sorted(list(set(browsers_available)))
+          print(browsers_available)
           for b in browsers_available: 
               browser.append_text(b)
               browser.set_active(0)
-
+        
         browser_box = Gtk.HBox()
         browser_void = Gtk.Label()
         browser_box.pack_start(browser_lab, False, False, 0)
