@@ -735,7 +735,6 @@ class Ice(Gtk.Window):
           NoBrowserError()
         else:
           browsers_available = sorted(list(set(browsers_available)))
-          print(browsers_available)
           for b in browsers_available: 
               browser.append_text(b)
               browser.set_active(0)
