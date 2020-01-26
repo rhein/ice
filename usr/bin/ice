@@ -55,12 +55,17 @@ _APPS_DIR = "{0}/.local/share/applications".format(_HOME)
 _PROFILES_DIR = "{0}/profiles".format(_ICE_DIR)
 _FF_PROFILES_DIR = "{0}/firefox".format(_ICE_DIR)
 _ICE_ICON = "/usr/share/pixmaps/ice.png"
+# Choice of browsers, multiple path options possible, we will just use the first one that is detected
 _BROWSERS=[
     {'name': 'Brave', 'bin':'/usr/bin/brave'},
     {'name': 'Chrome', 'bin': '/usr/bin/google-chrome'},
+    {'name': 'Chrome', 'bin': '/snap/bin/google-chrome'},
     {'name': 'Chromium', 'bin': '/usr/bin/chromium-browser'},
+    {'name': 'Chromium', 'bin': '/snap/bin/chromium-browser'},
     {'name': 'Vivaldi', 'bin': '/usr/bin/vivaldi-stable'},
-    {'name': 'Firefox', 'bin': '/usr/bin/firefox'}
+    {'name': 'Vivaldi', 'bin': '/usr/bin/vivaldi'},
+    {'name': 'Firefox', 'bin': '/usr/bin/firefox'},
+    {'name': 'Firefox', 'bin': '/snap/bin/firefox'}
 ]
 _LOCATIONS=[
     {'name': _("Accessories"), 'location': 'Utility;'},
@@ -278,7 +283,7 @@ def writefile(title, formatted, address, iconext, location):
     brow = browser.get_active_text()
     browser_selected = None
     for b in _BROWSERS:
-      if brow == b['name']:
+      if brow == b['name']+' ('+b['bin']+')':
         browser_selected = b 
 
     if browser_selected is None:
@@ -720,7 +725,7 @@ class Ice(Gtk.Window):
         browsers_available = 0
         for b in _BROWSERS:
           if os.path.exists(b['bin']):
-            browser.append_text(b['name'])
+            browser.append_text(b['name']+' ('+b['bin']+')')
             browsers_available+=1
 
         if browsers_available == 0:
